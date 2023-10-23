@@ -1,0 +1,37 @@
+---
+version: '3.7'
+services:
+  cronken:
+    image: cronken:latest
+    build: ./cronken
+    environment:
+      - CRONKEN_REDIS_INFO=redis:6379
+      - CRONKEN_JOB_SHELL=/bin/sh
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    depends_on:
+      - redis
+    deploy:
+      replicas: 3
+  cronken_webui:
+    image: cronken_webui:latest
+    build: ./cronken_webui
+    environment:
+      - CRONKEN_WEBUI_REDIS_INFO=redis:6379
+    depends_on:
+      - redis
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    ports:
+      - 8885:8885
+  redis:
+    image: redis:7.2.2-alpine
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis-cache:/data
+volumes:
+  redis-cache:
+    driver: local
+
