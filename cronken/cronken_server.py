@@ -1,6 +1,7 @@
 import asyncio
 import signal
 import os
+from typing import Any
 
 from cronken import Cronken
 
@@ -34,32 +35,30 @@ ALL_CONFIGS = {
 ALL_CONFIGS.update({k: None for k in REQUIRED_CONFIGS})
 
 
-def get_config(prefix: str, all_configs: dict) -> dict:
-    final_config = {}
-    for key, default_value in all_configs.items():
-        env_value = os.environ.get(f"{prefix}_{key.upper()}", None)
+def get_config_value(prefix: str, key: str, default: Any):
+    env_value = os.environ.get(f"{prefix}_{key.upper()}", None)
+    if env_value is None and default is None:
+        raise Exception(f"Required env var '{prefix}_{key.upper()}' not set")
 
-        # Cast env_value to the correct type, if it exists
-        if env_value is not None:
-            if isinstance(default_value, bool):
-                # bools in Python are instances of both bool and int, so this check needs to be before the>
-                env_value = env_value.lower() == "true"
-            elif isinstance(default_value, int):
-                env_value = int(env_value)
+    # Cast env_value to the correct type, if it exists
+    if env_value is not None:
+        if key == "redis_info":
+            # Special processing for the redis node(s) to convert from "foo:1234,bar:5678" to structured data
+            env_value = [
+                {"host": node.split(":")[0], "port": int(node.split(":")[1])}
+                for node in env_value.split(",")
+            ]
+        elif isinstance(default, bool):
+            # bools in Python are instances of both bool and int, so this check needs to be before the>
+            env_value = env_value.lower() == "true"
+        elif isinstance(default, int):
+            env_value = int(env_value)
 
-        if env_value is None and default_value is None:
-            raise Exception(f"Required config entry '{key}' or env var '{prefix}_{key.upper()}' not set")
+    return env_value if env_value is not None else default
 
-        final_config[key] = env_value if env_value is not None else default_value
 
-    # Special processing for the redis node(s) to convert from "foo:1234,bar:5678" to structured data
-    if "redis_info" in final_config:
-        final_config["redis_info"] = [
-            {"host": node.split(":")[0], "port": int(node.split(":")[1])}
-            for node in final_config["redis_info"].split(",")
-        ]
-
-    return final_config
+def get_config(prefix: str, defaults: dict) -> dict:
+    return {k: get_config_value(prefix, k, defaults[k]) for k in defaults}
 
 
 # Adapted from https://github.com/Populi/cronken/blob/master/example_server.py
